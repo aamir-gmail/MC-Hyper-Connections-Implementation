@@ -8,7 +8,7 @@ import math
 import requests
 import os
 
-# Character-level transformer
+# Character level transformer
 # --- Configuration ---
 BATCH_SIZE = 32
 BLOCK_SIZE = 128  # Context length
@@ -16,13 +16,14 @@ LEARNING_RATE = 3e-4
 EVAL_INTERVAL = 100
 # mHC Specifics
 N_STREAMS = 4  # Expansion rate n [cite: 373]
-EMBED_DIM = 256  # Dimension C, reduce this to 64 if you a GPU contr
-N_LAYERS = 6  # Number of Attention+MLP pairs , Reduce this to 4
+EMBED_DIM = 128  # Dimension C , reduce this to 64 if you a GPU contr
+N_LAYERS = 4  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
-MAX_ITERS = 1600        # Extended training steps
+MAX_ITERS = 1600       # Extended training steps
 WARMUP_STEPS = 100     # Warmup period
-GRAD_CLIP = 1.0        # Critical for preventing explosions
+GRAD_CLIP = 0.5        # Critical for preventing explosions
 WEIGHT_DECAY = 0.1     # Prevents unbounded weight growth
+DROPOUT = 0.1
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -145,49 +146,53 @@ class MHCWrapper(nn.Module):
 # --- Part 3: Standard Transformer Components ---
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, dim, head_size=16):
+    def __init__(self, dim):
         super().__init__()
         self.num_heads = 4
         self.head_dim = dim // 4
-
         self.qkv = nn.Linear(dim, dim * 3)
         self.proj = nn.Linear(dim, dim)
+
+        # NEW: Attention Dropout and Resid Dropout
+        self.attn_dropout = nn.Dropout(DROPOUT)
+        self.resid_dropout = nn.Dropout(DROPOUT)
+
         self.register_buffer("bias", torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE))
                              .view(1, 1, BLOCK_SIZE, BLOCK_SIZE))
 
     def forward(self, x):
         B, T, C = x.shape
-        # Calculate Q, K, V
         qkv = self.qkv(x)
         q, k, v = qkv.split(C, dim=2)
-
-        # Reshape for multi-head
         k = k.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         q = q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
-        # Attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
         att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
+
+        # Apply Dropout to attention weights
+        att = self.attn_dropout(att)
+
         y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C)
 
-        return self.proj(y)
-
+        # Apply Dropout to output projection
+        return self.resid_dropout(self.proj(y))
 
 class MLP(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, 4 * dim), # 4x expansion standard
-            nn.SiLU(),  # DeepSeek/mHC uses SwiGLU-like activation logic
+            nn.Linear(dim, 4 * dim),
+            nn.SiLU(),
             nn.Linear(4 * dim, dim),
+            nn.Dropout(DROPOUT) # NEW: Prevent co-adaptation of neurons
         )
 
     def forward(self, x):
         return self.net(x)
-
 
 # --- Part 4: The Full Language Model ---
 
@@ -358,4 +363,3 @@ if __name__ == "__main__":
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
-
