@@ -19,7 +19,7 @@ N_STREAMS = 4  # Expansion rate n [cite: 373]
 EMBED_DIM = 128  # Dimension C , reduce this to 64 if you a GPU contr
 N_LAYERS = 4  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
-MAX_ITERS = 1600       # Extended training steps, extend to 3200 watch out for the loss.
+MAX_ITERS = 12000       # Extended training steps
 WARMUP_STEPS = 100     # Warmup period
 GRAD_CLIP = 0.8        # Critical for preventing explosions
 WEIGHT_DECAY = 0.1     # Prevents unbounded weight growth
@@ -257,8 +257,10 @@ class MHCLanguageModel(nn.Module):
 
 # --- Helper: Data Loader ---
 def get_data(filename="timemachine.txt"):
+    # For better results increase the size of the text by 10x
     if not os.path.exists(filename):
         print(f"Downloading {filename}...")
+        # this is a small file for testing only.
         url = "https://www.gutenberg.org/cache/epub/35/pg35.txt"  # The Time Machine
         res = requests.get(url)
         with open(filename, 'w', encoding='utf-8') as f:
@@ -363,5 +365,3 @@ if __name__ == "__main__":
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
-
-
