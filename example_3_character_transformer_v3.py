@@ -20,7 +20,7 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # mHC Specifics
 N_STREAMS = 4  # Expansion rate n [cite: 373]
-EMBED_DIM = 256  # Dimension C , reduce this to 64 if you a GPU contr
+EMBED_DIM = 256  # Dimension C , reduce this to 64 if you have GPU constraints
 N_LAYERS = 6  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
 
@@ -321,3 +321,4 @@ if __name__ == "__main__":
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
 
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
+
