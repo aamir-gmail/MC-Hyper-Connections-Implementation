@@ -12,9 +12,9 @@ import os
 # --- Configuration ---
 BATCH_SIZE = 32
 BLOCK_SIZE = 128  # Context length
-MAX_ITERS = 15000
+MAX_ITERS = 1200
 LEARNING_RATE = 3e-4
-# LEARNING_RATE = 1e-3# We can you a higher learning rate for example
+# LEARNING_RATE = 1e-3# We can use a higher learning rate, for example
 EVAL_INTERVAL = 100
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -319,4 +319,5 @@ if __name__ == "__main__":
     # 4. Generate Text
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
+
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
