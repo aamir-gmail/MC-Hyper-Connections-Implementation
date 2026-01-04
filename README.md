@@ -3,4 +3,6 @@ Transformer Description: This repository contains a PyTorch implementation of Ma
 a novel architectural framework introduced in arXiv:2512.248801.Standard Hyper-Connections (HC) improve the model
 performance by expanding the residual stream width and diversifying connectivity.
 
-The model is there for the purpose of learning, the core algorithm. It is not meant to be a full-scale model. However core class can easily be adapted to a production-scale model.
+The model is there for the purpose of learning, the core algorithm. It is not meant to be a full-scale model. However, the core class can easily be adapted to a production-scale model.
+
+If you are looking for better results, please increase the size of the text fed into the model by at least 10x. 
