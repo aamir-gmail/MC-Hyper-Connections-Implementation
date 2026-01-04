@@ -8,21 +8,25 @@ import math
 import requests
 import os
 
-# Character level transformer
+# Character-level transformer
 # --- Configuration ---
 BATCH_SIZE = 32
 BLOCK_SIZE = 128  # Context length
-MAX_ITERS = 1200
 LEARNING_RATE = 3e-4
-# LEARNING_RATE = 1e-3# We can use a higher learning rate, for example
 EVAL_INTERVAL = 100
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-
 # mHC Specifics
 N_STREAMS = 4  # Expansion rate n [cite: 373]
-EMBED_DIM = 256  # Dimension C , reduce this to 64 if you have GPU constraints
+EMBED_DIM = 256  # Dimension C, reduce this to 64 if you a GPU contr
 N_LAYERS = 6  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
+MAX_ITERS = 5000       # Extended training steps
+WARMUP_STEPS = 100     # Warmup period
+GRAD_CLIP = 1.0        # Critical for preventing explosions
+WEIGHT_DECAY = 0.1     # Prevents unbounded weight growth
+
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
 
 torch.manual_seed(1337) # For Reproducibility
 
@@ -287,38 +291,70 @@ if __name__ == "__main__":
 
 
     # 2. Init Model
-    print(f"Initializing mHC Model with {N_STREAMS} streams, {N_LAYERS * 2} sub-layers...")
+    print(f"Initializing mHC Model with {N_STREAMS} streams...")
     model = MHCLanguageModel(vocab_size)
     model = model.to(DEVICE)
-    print(f"Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    # 1. OPTIMIZER WITH WEIGHT DECAY
+    # We separate params: Apply weight decay to matmul weights, but NOT to biases/layernorms/embeddings
+    param_dict = {pn: p for pn, p in model.named_parameters()}
+    decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+    nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+    optim_groups = [
+        {'params': decay_params, 'weight_decay': WEIGHT_DECAY},
+        {'params': nodecay_params, 'weight_decay': 0.0}
+    ]
+    optimizer = torch.optim.AdamW(optim_groups, lr=LEARNING_RATE, betas=(0.9, 0.95))
 
-    # 3. Training Loop
-    print("Starting training...")
+
+    # 2. LEARNING RATE SCHEDULER (Cosine Decay with Warmup)
+    def get_lr(it):
+        # 1) Linear Warmup
+        if it < WARMUP_STEPS:
+            return LEARNING_RATE * (it + 1) / (WARMUP_STEPS + 1)
+        # 2) If it > MAX_ITERS, return min lr
+        if it > MAX_ITERS:
+            return LEARNING_RATE * 0.1
+        # 3) Cosine Decay
+        decay_ratio = (it - WARMUP_STEPS) / (MAX_ITERS - WARMUP_STEPS)
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+        return LEARNING_RATE * 0.1 + coeff * (LEARNING_RATE * 0.9)
+
+
+    # --- ROBUST TRAINING LOOP ---
+    print("Starting training with Stability fixes...")
+
     for iter in range(MAX_ITERS):
+
+        # A. Apply LR Schedule
+        lr = get_lr(iter)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+        # B. Evaluation
         if iter % EVAL_INTERVAL == 0:
-            # Estimate loss
             model.eval()
             with torch.no_grad():
-                losses = torch.zeros(50)  # check 50 batches
+                losses = torch.zeros(50)
                 for k in range(50):
                     X, Y = get_batch('val')
                     logits, loss = model(X, Y)
                     losses[k] = loss.item()
-            print(f"Step {iter}: Val Loss {losses.mean():.4f}")
+            print(f"Step {iter}: Val Loss {losses.mean():.4f} | LR: {lr:.2e}")
             model.train()
 
-        # Update
+        # C. Forward & Backward
         xb, yb = get_batch('train')
         logits, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
+
+        # D. GRADIENT CLIPPING (The Anti-Explosion Shield)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+
         optimizer.step()
 
     # 4. Generate Text
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
-
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
-
