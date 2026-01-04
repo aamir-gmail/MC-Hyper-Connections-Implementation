@@ -19,7 +19,7 @@ N_STREAMS = 4  # Expansion rate n [cite: 373]
 EMBED_DIM = 256  # Dimension C, reduce this to 64 if you a GPU contr
 N_LAYERS = 6  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
-MAX_ITERS = 5000       # Extended training steps
+MAX_ITERS = 1600        # Extended training steps
 WARMUP_STEPS = 100     # Warmup period
 GRAD_CLIP = 1.0        # Critical for preventing explosions
 WEIGHT_DECAY = 0.1     # Prevents unbounded weight growth
@@ -358,3 +358,4 @@ if __name__ == "__main__":
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
+
