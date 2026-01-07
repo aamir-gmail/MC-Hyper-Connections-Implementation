@@ -1,4 +1,4 @@
-Please give us a star on GitHub. It motivates me to create new code repos.
+Please consider giving us a star on GitHub. It motivates me to create new code repos.
 # Manifold-Constrained Hyper-Connections (mHC) Implementation
 
 A PyTorch implementation of the **Manifold-Constrained Hyper-Connections (mHC)** architecture proposed by DeepSeek-AI (2025).
