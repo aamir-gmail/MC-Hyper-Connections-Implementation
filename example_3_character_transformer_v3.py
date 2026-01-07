@@ -8,7 +8,7 @@ import math
 import requests
 import os
 
-# Character level transformer
+# Character-level transformer
 # --- Configuration ---
 BATCH_SIZE = 32
 BLOCK_SIZE = 128  # Context length
@@ -19,8 +19,8 @@ N_STREAMS = 4  # Expansion rate n [cite: 373]
 EMBED_DIM = 128  # Dimension C , reduce this to 64 if you a GPU contr
 N_LAYERS = 4  # Number of Attention+MLP pairs , Reduce this to 4
 SINKHORN_ITERS = 20  # [cite: 276]
-MAX_ITERS = 12000       # Extended training steps
-WARMUP_STEPS = 100     # Warmup period
+MAX_ITERS = 12000       # Extended training steps, increase this to 36K for better results.
+WARMUP_STEPS = 100     # Warmup period, increase this 600, in conjunction with train steps. 36K
 GRAD_CLIP = 0.8        # Critical for preventing explosions
 WEIGHT_DECAY = 0.1     # Prevents unbounded weight growth
 DROPOUT = 0.05
@@ -365,3 +365,4 @@ if __name__ == "__main__":
     print("\n--- Generating Text ---")
     context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
     print(decode(model.generate(context, max_new_tokens=300)[0].tolist()))
+
